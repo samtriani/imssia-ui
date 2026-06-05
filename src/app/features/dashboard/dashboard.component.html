@@ -1,0 +1,326 @@
+<main class="main">
+
+  <!-- ══ BÚSQUEDA ══ -->
+  <section class="section">
+    <div class="section-label">Buscar paciente <span class="section-label-opt">(opcional)</span></div>
+    <div class="search-bar" [class.focused]="curpInput.length > 0">
+      <span class="search-icon">🔍</span>
+      <input
+        class="search-input"
+        type="text"
+        [(ngModel)]="curpInput"
+        placeholder="Ingresa CURP del paciente para consulta con contexto clínico..."
+        maxlength="18"
+        (input)="curpInput = curpInput.toUpperCase()"
+        (keydown)="onCurpKeydown($event)"
+        [disabled]="searchLoading"
+      />
+      <button class="search-clear" *ngIf="curpInput" (click)="limpiarBusqueda()">✕</button>
+      <button class="search-btn" (click)="buscarPaciente()" [disabled]="searchLoading">
+        <span *ngIf="!searchLoading">Buscar</span>
+        <span *ngIf="searchLoading" class="spinner-sm"></span>
+      </button>
+    </div>
+    <div class="search-error" *ngIf="searchError">⚠️ {{ searchError }}</div>
+  </section>
+
+  <!-- ══ CARD PACIENTE ══ -->
+  <section class="patient-card" *ngIf="paciente">
+    <div class="patient-accent"></div>
+    <div class="patient-avatar">{{ paciente.sexo === 'Femenino' ? '👩' : '👨' }}</div>
+    <div class="patient-main">
+      <div class="patient-name">{{ paciente.nombre }}</div>
+      <div class="patient-badges">
+        <span class="badge badge-sexo">{{ paciente.sexo }}</span>
+        <span class="badge badge-turno">{{ paciente.turno }}</span>
+      </div>
+    </div>
+    <div class="divider-v"></div>
+    <div class="info-item">
+      <div class="info-label">Edad</div>
+      <div class="info-value">{{ paciente.edad }}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">F. Nacimiento</div>
+      <div class="info-value">{{ paciente.fechaNacimiento }}</div>
+    </div>
+    <div class="divider-v"></div>
+    <div class="info-item">
+      <div class="info-label">CURP</div>
+      <div class="info-value info-value--mono info-value--sm">{{ paciente.curp }}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">NSS</div>
+      <div class="info-value info-value--mono">{{ paciente.nss }}</div>
+    </div>
+    <div class="divider-v"></div>
+    <div class="info-item">
+      <div class="info-label">A. Médico</div>
+      <div class="info-value info-value--mono">{{ paciente.medicoAdscrito }}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">U. Adscripción</div>
+      <div class="info-value info-value--mono">{{ paciente.unidadAdscripcion }}</div>
+    </div>
+  </section>
+
+  <!-- ══ AI SECTION ══ -->
+  <section class="ai-section">
+
+    <div class="ai-header">
+      <div class="ai-title">
+        <span>🤖</span> IMSS AI
+        <span class="ai-badge">BETA</span>
+      </div>
+      <span class="ai-model-tag">MedGemma 4B-it · LM Studio · Neon DB</span>
+    </div>
+
+    <!-- Pill modo general (sin paciente) -->
+    <div class="mode-pill mode-pill--general" *ngIf="!paciente">
+      <span class="mode-dot mode-dot--general"></span>
+      Modo consulta general — responde como
+      <strong>{{ getEspecialidadLabel(session?.cveEspecialidad) }}</strong>
+      sin contexto de paciente específico
+      <span class="mode-nota-tag" *ngIf="notaActiva">· 📎 nota adjunta</span>
+    </div>
+
+    <!-- Pill modo clínico (con paciente) -->
+    <div class="mode-pill mode-pill--clinical" *ngIf="paciente">
+      <span class="mode-dot mode-dot--clinical"></span>
+      Contexto clínico activo:
+      <strong>{{ paciente.nombre.split(' ')[0] }} {{ paciente.nombre.split(' ')[1] }}</strong>
+      — historial, antecedentes, vacunas y consultas cargados desde Neon
+      <span class="mode-nota-tag" *ngIf="notaActiva">· 📎 nota adjunta</span>
+    </div>
+
+    <div class="chat-card">
+
+      <!-- ══ MENSAJES ══ -->
+      <div class="chat-messages" #chatContainer>
+
+        <!-- Empty state sin paciente -->
+        <div class="chat-empty" *ngIf="messages.length === 0 && !aiLoading && !paciente">
+          <div class="chat-empty-icon">🤖</div>
+          <div class="chat-empty-text">
+            Listo para consultas generales de
+            <strong>{{ getEspecialidadLabel(session?.cveEspecialidad) }}</strong>.<br>
+            Busca un paciente para consultas con contexto clínico completo.
+          </div>
+          <div class="chat-empty-sub">Powered by MedGemma 4B-it · msmedgemma-core</div>
+        </div>
+
+        <!-- Empty state con paciente -->
+        <div class="chat-empty" *ngIf="messages.length === 0 && !aiLoading && paciente">
+          <div class="chat-empty-icon">🩺</div>
+          <div class="chat-empty-text">
+            Paciente cargado — el AI usará su historial clínico real.<br>
+            Escribe tu pregunta o usa los accesos rápidos.
+          </div>
+          <div class="chat-empty-sub">Powered by MedGemma 4B-it · msmedgemma-core · Neon PostgreSQL</div>
+        </div>
+
+        <!-- Mensajes -->
+        <div
+          *ngFor="let msg of messages; trackBy: trackById"
+          class="msg"
+          [class.msg--user]="msg.role === 'user'"
+          [class.msg--ai]="msg.role === 'ai'"
+        >
+          <div class="msg-avatar">{{ msg.role === 'user' ? '👨‍⚕️' : '🤖' }}</div>
+          <div class="msg-body">
+
+            <!-- Badge especialidad en mensajes AI -->
+            <div class="msg-especialidad" *ngIf="msg.role === 'ai' && msg.especialidad">
+              {{ getEspecialidadLabel(msg.especialidad) }}
+              <span class="msg-modo" *ngIf="msg.modoGeneral">· consulta general</span>
+              <span class="msg-modo" *ngIf="!msg.modoGeneral">· con contexto clínico</span>
+            </div>
+
+            <div class="msg-bubble" [innerHTML]="formatMessage(msg.text)"></div>
+
+            <!-- Tabla de procedimientos detectados -->
+            <div class="proc-card" *ngIf="msg.procedimientosDetectados?.length">
+              <div class="proc-card-header">
+                <span class="proc-card-icon">💰</span>
+                <span class="proc-card-title">Procedimientos detectados en la nota</span>
+                <span class="proc-card-count">{{ msg.procedimientosDetectados!.length }}</span>
+              </div>
+              <table class="proc-table">
+                <thead>
+                  <tr>
+                    <th>Procedimiento</th>
+                    <th>Base</th>
+                    <th>1er nivel</th>
+                    <th>2do nivel</th>
+                    <th>3er nivel</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let p of msg.procedimientosDetectados">
+                    <td class="proc-nombre">{{ p.desProcedimiento }}</td>
+                    <td class="proc-monto proc-monto--base">{{ formatPeso(p.numCostoBase) }}</td>
+                    <td class="proc-monto">{{ formatPeso(p.numCosto1erNivel) }}</td>
+                    <td class="proc-monto">{{ formatPeso(p.numCosto2doNivel) }}</td>
+                    <td class="proc-monto">{{ formatPeso(p.numCosto3erNivel) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="proc-card-footer">
+                Costos de referencia IMSS · 1er nivel: UMF · 2do nivel: HGZ/HGR · 3er nivel: UMAE
+              </div>
+            </div>
+
+            <div class="msg-meta">
+              {{ msg.timestamp | date:'HH:mm' }}
+              <span *ngIf="msg.tokensPerSecond">
+                · ⚡ {{ msg.tokensPerSecond | number:'1.1-1' }} tok/s
+              </span>
+              <span *ngIf="msg.totalTokens">
+                · {{ msg.totalTokens }} tokens
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Typing indicator -->
+        <div class="typing-indicator" *ngIf="aiLoading">
+          <div class="msg-avatar">🤖</div>
+          <div class="typing-dots"><span></span><span></span><span></span></div>
+        </div>
+
+      </div>
+
+      <!-- ══ QUICK PROMPTS ══ -->
+      <div class="quick-prompts">
+        <button
+          *ngFor="let qp of quickPrompts"
+          class="quick-btn"
+          (click)="useQuickPrompt(qp.text)"
+          [disabled]="aiLoading"
+        >
+          {{ qp.icon }} {{ qp.label }}
+        </button>
+      </div>
+
+      <!-- ══ NOTA DE HOSPITALIZACIÓN ══ -->
+      <div class="nota-panel">
+
+        <div class="nota-panel-header" (click)="notaPanelAbierto = !notaPanelAbierto">
+          <div class="nota-panel-title">
+            <span>📎</span>
+            Nota de hospitalización
+            <span class="nota-activa-pill" *ngIf="notaActiva">
+              <span class="nota-activa-dot"></span> activa
+            </span>
+          </div>
+          <span class="nota-panel-chevron" [class.nota-panel-chevron--open]="notaPanelAbierto">›</span>
+        </div>
+
+        <div class="nota-panel-body" *ngIf="notaPanelAbierto">
+
+          <!-- Drop zone -->
+          <div class="nota-upload"
+               [class.nota-upload--dragging]="isDragging"
+               [class.nota-upload--loaded]="notaArchivo && !notaLoading"
+               (dragover)="onDragOver($event)"
+               (dragleave)="onDragLeave()"
+               (drop)="onDrop($event)"
+               (click)="(!notaArchivo && !notaLoading) ? fileInput.click() : null">
+
+            <input #fileInput type="file" accept=".pdf,.doc,.docx"
+                   style="display:none" (change)="onFileChange($event)">
+
+            <ng-container *ngIf="!notaArchivo && !notaLoading">
+              <span class="nota-icon">📎</span>
+              <div class="nota-upload-text">Arrastra un Word o PDF aquí</div>
+              <div class="nota-upload-sub">o haz clic · .pdf &nbsp;.doc &nbsp;.docx</div>
+            </ng-container>
+
+            <ng-container *ngIf="notaLoading">
+              <span class="spinner-nota"></span>
+              <div class="nota-upload-text">Extrayendo texto&hellip;</div>
+            </ng-container>
+
+            <ng-container *ngIf="notaArchivo && !notaLoading">
+              <span class="nota-icon nota-icon--file">📄</span>
+              <div class="nota-file-info">
+                <span class="nota-file-name">{{ notaArchivo.name }}</span>
+                <span class="nota-file-words" *ngIf="notaPalabras > 0">
+                  ✓ {{ notaPalabras | number }} palabras extraídas
+                </span>
+                <span class="nota-file-words nota-file-words--warn" *ngIf="notaPalabras === 0 && !notaError">
+                  ⚠ Sin texto extraído
+                </span>
+              </div>
+              <button class="nota-remove" (click)="$event.stopPropagation(); limpiarNota()">✕</button>
+            </ng-container>
+          </div>
+
+          <!-- Error de extracción -->
+          <div class="nota-extract-error" *ngIf="notaError">
+            ⚠️ {{ notaError }}
+          </div>
+
+          <!-- Preview texto extraído -->
+          <div class="nota-preview" *ngIf="notaTexto && !notaError">
+            <span class="nota-preview-label">Vista previa del texto extraído:</span>
+            <span class="nota-preview-text">{{ notaTexto.slice(0, 220) }}{{ notaTexto.length > 220 ? '…' : '' }}</span>
+          </div>
+
+          <!-- Fechas -->
+          <div class="nota-dates">
+            <div class="nota-date-group">
+              <label class="nota-date-label">Ingreso</label>
+              <input type="date" class="nota-date-input"
+                     [(ngModel)]="fechaIngreso" [max]="fechaEgreso || ''">
+            </div>
+            <div class="nota-date-group">
+              <label class="nota-date-label">Egreso</label>
+              <input type="date" class="nota-date-input"
+                     [(ngModel)]="fechaEgreso" [min]="fechaIngreso || ''">
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ══ PROMPT BAR ══ -->
+      <div class="prompt-bar" [class.prompt-bar--general]="!paciente">
+        <textarea
+          class="prompt-input"
+          [(ngModel)]="promptInput"
+          [placeholder]="paciente
+            ? 'Pregunta algo sobre el paciente — el AI usará su historial clínico completo...'
+            : 'Consulta general de ' + getEspecialidadLabel(session?.cveEspecialidad) + '...'"
+          rows="1"
+          (keydown)="onPromptKeydown($event)"
+          (input)="autoResize($event)"
+          [disabled]="aiLoading"
+        ></textarea>
+        <button
+          class="prompt-send"
+          (click)="sendMessage()"
+          [disabled]="aiLoading || !promptInput.trim()"
+          title="Enviar (Enter)"
+        >➤</button>
+      </div>
+
+      <!-- ══ STATS BAR ══ -->
+      <div class="stats-bar" *ngIf="lastResponse.totalOutputTokens">
+        <span class="stats-dot"></span>
+        <span>{{ lastResponse.totalOutputTokens }} tokens</span>
+        <span class="stats-sep">·</span>
+        <span>⚡ {{ lastResponse.tokensPerSecond | number:'1.1-1' }} tok/s</span>
+        <span class="stats-sep">·</span>
+        <span>📎 {{ lastResponse.seccionesContexto }} secciones</span>
+        <span class="stats-sep">·</span>
+        <span class="stats-especialidad">{{ getEspecialidadLabel(lastResponse.especialidadDetectada) }}</span>
+      </div>
+
+      <p class="prompt-hint">
+        IMSS AI puede cometer errores. Siempre verifica la información clínica con criterio médico.
+      </p>
+    </div>
+  </section>
+
+</main>

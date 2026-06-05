@@ -1,0 +1,86 @@
+<div class="shell" [class.sidebar-open]="sidebarOpen">
+
+  <!-- ══ TOPBAR ══ -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="topbar-toggle" (click)="toggleSidebar()" title="Menú">
+        <span class="toggle-bar"></span>
+        <span class="toggle-bar"></span>
+        <span class="toggle-bar"></span>
+      </button>
+      <div class="topbar-logo">🏥</div>
+      <span class="topbar-brand">IMSS <strong>AI</strong></span>
+      <span class="topbar-sep">—</span>
+      <span class="topbar-subtitle">Plataforma de Atención Médica Inteligente</span>
+    </div>
+    <div class="topbar-right">
+      <div class="topbar-especialidad" *ngIf="session?.desEspecialidad">
+        {{ getEspecialidadLabel(session?.cveEspecialidad) }}
+      </div>
+      <div class="topbar-user">
+        <div class="topbar-avatar">{{ session?.matricula?.substring(0,2) | uppercase }}</div>
+        <div class="topbar-user-info">
+          <span class="topbar-nombre">{{ session?.nombreCorto || session?.nombre }}</span>
+          <span class="topbar-unidad" *ngIf="session?.unidadMedica">{{ session?.unidadMedica }}</span>
+        </div>
+      </div>
+      <button class="topbar-logout" (click)="logout()">Cerrar sesión</button>
+    </div>
+  </header>
+
+  <!-- ══ GOB BAND ══ -->
+  <div class="gob-band">
+    <span>🇲🇽</span>
+    <span class="gob-band-text">Gobierno de México — Instituto Mexicano del Seguro Social</span>
+  </div>
+
+  <!-- ══ BODY ══ -->
+  <div class="shell-body">
+
+    <!-- Overlay para mobile -->
+    <div class="sidebar-overlay" *ngIf="isMobile && sidebarOpen" (click)="closeSidebarMobile()"></div>
+
+    <!-- ══ SIDEBAR ══ -->
+    <aside class="sidebar" [class.sidebar--open]="sidebarOpen">
+
+      <nav class="sidebar-nav">
+        <div class="sidebar-heading">Módulos</div>
+
+        <a
+          *ngFor="let item of navItems"
+          [routerLink]="item.route"
+          class="nav-item"
+          [class.nav-item--active]="isActive(item.route)"
+          (click)="closeSidebarMobile()"
+        >
+          <span class="nav-icon">{{ item.icon }}</span>
+          <div class="nav-text">
+            <span class="nav-label">{{ item.label }}</span>
+            <span class="nav-sublabel">{{ item.sublabel }}</span>
+          </div>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-footer-row">
+          <span class="sidebar-model-tag">MedGemma 4B-it</span>
+        </div>
+        <div class="sidebar-footer-row sidebar-footer-row--sub">Neon DB · LM Studio</div>
+      </div>
+    </aside>
+
+    <!-- ══ CONTENIDO ══ -->
+    <div class="shell-content">
+      <router-outlet></router-outlet>
+    </div>
+
+  </div>
+
+  <!-- ══ FOOTER ══ -->
+  <footer class="footer">
+    <span>🏥</span>
+    <strong class="footer-brand">IMSS AI</strong>
+    <span class="footer-text">— Instituto Mexicano del Seguro Social · Plataforma de Atención Médica Inteligente</span>
+  </footer>
+
+</div>

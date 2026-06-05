@@ -1,0 +1,440 @@
+<div class="costos-page">
+
+  <!-- ══ PAGE HEADER ══ -->
+  <div class="page-header">
+    <div class="page-header-left">
+      <div class="page-title">
+        <span class="page-title-icon">💰</span>
+        Costos de Procedimientos
+      </div>
+      <div class="page-subtitle">
+        Análisis automático de costos en notas médicas — catálogo IMSS por nivel de atención
+      </div>
+    </div>
+    <div class="page-header-tags">
+      <span class="header-tag">UMF · 1er Nivel</span>
+      <span class="header-tag header-tag--2">HGZ/HGR · 2do Nivel</span>
+      <span class="header-tag header-tag--3">UMAE · 3er Nivel</span>
+    </div>
+  </div>
+
+  <!-- ══ BÚSQUEDA PACIENTE ══ -->
+  <section class="section">
+    <div class="section-label">
+      Paciente <span class="section-label-opt">(opcional — carga notas del historial clínico)</span>
+    </div>
+    <div class="search-bar" [class.focused]="curpInput.length > 0">
+      <span class="search-icon">🔍</span>
+      <input
+        class="search-input"
+        type="text"
+        [(ngModel)]="curpInput"
+        placeholder="Ingresa CURP para acceder al historial de notas médicas..."
+        maxlength="18"
+        (input)="curpInput = curpInput.toUpperCase()"
+        (keydown)="onCurpKeydown($event)"
+        [disabled]="searchLoading"
+      />
+      <button class="search-clear" *ngIf="curpInput" (click)="limpiarBusqueda()">✕</button>
+      <button class="search-btn" (click)="buscarPaciente()" [disabled]="searchLoading">
+        <span *ngIf="!searchLoading">Buscar</span>
+        <span *ngIf="searchLoading" class="spinner-sm"></span>
+      </button>
+    </div>
+    <div class="search-error" *ngIf="searchError">⚠️ {{ searchError }}</div>
+  </section>
+
+  <!-- ══ CARD PACIENTE ══ -->
+  <section class="patient-card" *ngIf="paciente">
+    <div class="patient-accent"></div>
+    <div class="patient-avatar">{{ paciente.sexo === 'Femenino' ? '👩' : '👨' }}</div>
+    <div class="patient-main">
+      <div class="patient-name">{{ paciente.nombre }}</div>
+      <div class="patient-badges">
+        <span class="badge badge-sexo">{{ paciente.sexo }}</span>
+        <span class="badge badge-turno">{{ paciente.turno }}</span>
+      </div>
+    </div>
+    <div class="divider-v"></div>
+    <div class="info-item">
+      <div class="info-label">Edad</div>
+      <div class="info-value">{{ paciente.edad }}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">CURP</div>
+      <div class="info-value info-value--mono info-value--sm">{{ paciente.curp }}</div>
+    </div>
+    <div class="divider-v"></div>
+    <div class="info-item">
+      <div class="info-label">NSS</div>
+      <div class="info-value info-value--mono">{{ paciente.nss }}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">Unidad</div>
+      <div class="info-value info-value--sm">{{ paciente.unidadAdscripcion }}</div>
+    </div>
+  </section>
+
+  <!-- ══ PANEL PRINCIPAL: 2 COLUMNAS ══ -->
+  <div class="analysis-layout">
+
+    <!-- ══ COLUMNA IZQUIERDA — NOTAS ══ -->
+    <div class="notes-panel">
+      <div class="panel-card">
+
+        <div class="panel-title">
+          <span>📋</span> Notas médicas a analizar
+        </div>
+
+        <!-- TABS (solo si hay paciente) -->
+        <div class="tabs" *ngIf="paciente">
+          <button class="tab-btn" [class.active]="activeTab === 'historial'" (click)="activeTab = 'historial'">
+            🗂️ Historial del sistema
+          </button>
+          <button class="tab-btn" [class.active]="activeTab === 'cargar'" (click)="activeTab = 'cargar'">
+            📎 Cargar nota
+          </button>
+        </div>
+
+        <!-- ── TAB HISTORIAL ── -->
+        <div class="tab-content" *ngIf="paciente && activeTab === 'historial'">
+
+          <!-- Sin paciente: prompt para buscar -->
+          <div class="empty-historial" *ngIf="!paciente">
+            <div class="empty-icon">🔍</div>
+            <div class="empty-text">Busca un paciente por CURP para ver su historial de notas clínicas</div>
+            <div class="empty-sub">O carga una nota directamente desde un archivo en la pestaña "Cargar nota"</div>
+          </div>
+
+          <!-- Con paciente: cargando -->
+          <div class="loading-consultas" *ngIf="paciente && consultasLoading">
+            <span class="spinner-sm spinner-sm--dark"></span>
+            Cargando historial de consultas…
+          </div>
+
+          <!-- Con paciente: sin consultas -->
+          <div class="empty-historial" *ngIf="paciente && !consultasLoading && consultas.length === 0">
+            <div class="empty-icon">📭</div>
+            <div class="empty-text">No se encontraron consultas registradas para este paciente</div>
+            <div class="empty-sub">Puedes cargar una nota de hospitalización en la pestaña "Cargar nota"</div>
+          </div>
+
+          <!-- Con paciente: lista de consultas -->
+          <div class="consultas-list" *ngIf="paciente && !consultasLoading && consultas.length > 0">
+            <div class="consultas-actions">
+              <button class="link-btn" (click)="seleccionarTodas()">Seleccionar todas</button>
+              <span class="sep-dot">·</span>
+              <button class="link-btn" (click)="deseleccionarTodas()">Ninguna</button>
+              <span class="selected-count">{{ selectedConsultaIds.size }}/{{ consultas.length }} seleccionadas</span>
+            </div>
+
+            <div
+              class="consulta-item"
+              *ngFor="let c of consultas"
+              [class.consulta-item--selected]="selectedConsultaIds.has(c.idConsulta)"
+              (click)="toggleConsulta(c.idConsulta)"
+            >
+              <div class="consulta-check">
+                <div class="checkbox" [class.checkbox--checked]="selectedConsultaIds.has(c.idConsulta)">
+                  <span *ngIf="selectedConsultaIds.has(c.idConsulta)">✓</span>
+                </div>
+              </div>
+              <div class="consulta-info">
+                <div class="consulta-fecha">{{ c.fecConsulta }}</div>
+                <div class="consulta-tipo" *ngIf="c.desTipoConsulta">{{ c.desTipoConsulta }}</div>
+                <div class="consulta-motivo">{{ getMotivoResumen(c.desMotivoConsulta) }}</div>
+                <div class="consulta-medico">Dr. {{ c.nombreMedico }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── TAB CARGAR NOTAS (múltiples) ── -->
+        <div class="tab-content" *ngIf="!paciente || activeTab === 'cargar'">
+
+          <!-- Hint sin paciente -->
+          <div class="no-patient-hint" *ngIf="!paciente">
+            <span>💡</span> Carga hasta {{ MAX_NOTAS }} notas directamente, o busca un paciente para acceder al historial del sistema.
+          </div>
+
+          <!-- Contador y acciones -->
+          <div class="notas-header" *ngIf="notas.length > 0">
+            <div class="notas-counter">
+              <span class="notas-counter-num">{{ notas.length }}</span>
+              <span class="notas-counter-sep">/</span>
+              <span class="notas-counter-max">{{ MAX_NOTAS }}</span>
+              <span class="notas-counter-label">notas</span>
+              <span class="notas-counter-words" *ngIf="totalPalabras > 0">
+                · {{ totalPalabras | number }} palabras totales
+              </span>
+            </div>
+            <button class="link-btn link-btn--danger" (click)="limpiarTodasNotas()">Eliminar todas</button>
+          </div>
+
+          <!-- Lista de notas cargadas -->
+          <div class="notas-list" *ngIf="notas.length > 0">
+            <div
+              class="nota-item"
+              *ngFor="let nota of notas; let i = index"
+              [class.nota-item--loading]="nota.loading"
+              [class.nota-item--error]="nota.error"
+              [class.nota-item--ok]="!nota.loading && !nota.error && nota.texto"
+            >
+              <div class="nota-item-left">
+                <div class="nota-item-num">{{ i + 1 }}</div>
+              </div>
+              <div class="nota-item-body">
+                <div class="nota-item-name">{{ nota.archivo.name }}</div>
+                <div class="nota-item-status" *ngIf="nota.loading">
+                  <span class="spinner-xs"></span> Extrayendo texto…
+                </div>
+                <div class="nota-item-status nota-item-status--ok" *ngIf="!nota.loading && !nota.error && nota.texto">
+                  ✓ {{ nota.palabras | number }} palabras extraídas
+                </div>
+                <div class="nota-item-status nota-item-status--error" *ngIf="nota.error">
+                  ⚠ {{ nota.error }}
+                </div>
+                <!-- Preview del texto -->
+                <div class="nota-item-preview" *ngIf="!nota.loading && nota.texto && !nota.error">
+                  {{ nota.texto.slice(0, 120) }}{{ nota.texto.length > 120 ? '…' : '' }}
+                </div>
+              </div>
+              <button
+                class="nota-item-remove"
+                (click)="eliminarNota(nota.id)"
+                [disabled]="nota.loading"
+                title="Eliminar nota"
+              >✕</button>
+            </div>
+          </div>
+
+          <!-- Zona de carga (visible mientras queden espacios) -->
+          <div
+            class="nota-upload"
+            *ngIf="puedeAgregarMas"
+            [class.nota-upload--dragging]="isDragging"
+            [class.nota-upload--compact]="notas.length > 0"
+            (dragover)="onDragOver($event)"
+            (dragleave)="onDragLeave()"
+            (drop)="onDrop($event)"
+            (click)="fileInput.click()"
+          >
+            <input
+              #fileInput
+              type="file"
+              accept=".pdf,.doc,.docx"
+              multiple
+              style="display:none"
+              (change)="onFileChange($event)"
+            >
+
+            <ng-container *ngIf="notas.length === 0">
+              <span class="upload-icon">📎</span>
+              <div class="upload-text">Arrastra las notas médicas aquí</div>
+              <div class="upload-sub">o haz clic para seleccionar · hasta {{ MAX_NOTAS }} archivos · .pdf &nbsp; .doc &nbsp; .docx</div>
+            </ng-container>
+
+            <ng-container *ngIf="notas.length > 0">
+              <span class="upload-icon-sm">➕</span>
+              <div class="upload-text-sm">
+                Agregar nota {{ notas.length + 1 }}
+                <span class="upload-remaining">(quedan {{ MAX_NOTAS - notas.length }} espacios)</span>
+              </div>
+            </ng-container>
+          </div>
+
+          <!-- Mensaje cuando se alcanzó el límite -->
+          <div class="notas-limit-msg" *ngIf="!puedeAgregarMas">
+            <span>✅</span> Límite de {{ MAX_NOTAS }} notas alcanzado. Elimina alguna para agregar otra.
+          </div>
+
+        </div>
+
+        <!-- ── FECHAS DE HOSPITALIZACIÓN ── -->
+        <div class="dates-section">
+          <div class="dates-label">
+            <span>📅</span> Fechas de hospitalización <span class="dates-label-opt">(para cálculo por días)</span>
+          </div>
+          <div class="dates-row">
+            <div class="date-group">
+              <label class="date-label">Ingreso</label>
+              <input type="date" class="date-input"
+                     [(ngModel)]="fechaIngreso" [max]="fechaEgreso || ''">
+            </div>
+            <div class="date-sep">→</div>
+            <div class="date-group">
+              <label class="date-label">Egreso</label>
+              <input type="date" class="date-input"
+                     [(ngModel)]="fechaEgreso" [min]="fechaIngreso || ''">
+            </div>
+          </div>
+        </div>
+
+        <!-- ── BOTÓN ANALIZAR ── -->
+        <button
+          class="analyze-btn"
+          (click)="analizar()"
+          [disabled]="!puedeAnalizar"
+          [class.analyze-btn--loading]="analizando"
+        >
+          <span *ngIf="!analizando">🔍 Analizar costos de procedimientos</span>
+          <span *ngIf="analizando" class="btn-loading">
+            <span class="spinner-sm"></span> Analizando notas…
+          </span>
+        </button>
+
+        <div class="analyze-hint" *ngIf="!puedeAnalizar && !analizando">
+          <span *ngIf="!procesando">Selecciona notas del historial o carga al menos un archivo para analizar</span>
+          <span *ngIf="procesando"><span class="spinner-xs"></span> Procesando archivos…</span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ══ COLUMNA DERECHA — RESULTADOS ══ -->
+    <div class="results-panel">
+
+      <!-- Estado vacío -->
+      <div class="results-empty" *ngIf="!resultados && !analizando && !errorAnalisis">
+        <div class="results-empty-icon">📊</div>
+        <div class="results-empty-title">Costos y procedimientos de las notas médicas</div>
+        <div class="results-empty-text">
+          Selecciona las notas clínicas del paciente y presiona "Analizar costos" para detectar automáticamente los procedimientos y sus costos por nivel de atención IMSS.
+        </div>
+        <div class="results-empty-levels">
+          <div class="level-pill level-pill--1">UMF · 1er Nivel</div>
+          <div class="level-pill level-pill--2">HGZ · 2do Nivel</div>
+          <div class="level-pill level-pill--3">UMAE · 3er Nivel</div>
+        </div>
+      </div>
+
+      <!-- Estado cargando -->
+      <div class="results-loading" *ngIf="analizando">
+        <div class="loading-spinner">
+          <span class="spinner-lg"></span>
+        </div>
+        <div class="loading-title">Analizando notas médicas…</div>
+        <div class="loading-text">
+          Detectando procedimientos y consultando catálogo de costos IMSS
+        </div>
+      </div>
+
+      <!-- Error -->
+      <div class="results-error" *ngIf="errorAnalisis && !analizando">
+        <div class="error-icon">⚠️</div>
+        <div class="error-title">Error en el análisis</div>
+        <div class="error-text">{{ errorAnalisis }}</div>
+        <button class="retry-btn" (click)="analizar()">Reintentar</button>
+      </div>
+
+      <!-- RESULTADOS -->
+      <div class="results-card" *ngIf="resultados && !analizando">
+
+        <!-- Sin procedimientos -->
+        <div class="no-procs" *ngIf="resultados.totalProcedimientos === 0">
+          <div class="no-procs-icon">🔎</div>
+          <div class="no-procs-title">No se detectaron procedimientos</div>
+          <div class="no-procs-text">
+            Las notas analizadas no contienen procedimientos reconocidos en el catálogo IMSS.
+            Verifica que las notas incluyan términos como hospitalización, electrocardiograma,
+            traslado en ambulancia, laboratorio, rayos X, entre otros.
+          </div>
+        </div>
+
+        <!-- TABLA DE PROCEDIMIENTOS -->
+        <div class="proc-results" *ngIf="resultados.totalProcedimientos > 0">
+
+          <!-- Header de la tabla -->
+          <div class="proc-header">
+            <div class="proc-header-left">
+              <span class="proc-header-icon">💰</span>
+              <span class="proc-header-title">Procedimientos detectados en la nota</span>
+            </div>
+            <span class="proc-header-count">{{ resultados.totalProcedimientos }}</span>
+          </div>
+
+          <!-- Info hospitalización si aplica -->
+          <div class="hosp-info" *ngIf="resultados.diasHospitalizacion > 0">
+            <span class="hosp-icon">🏥</span>
+            <strong>{{ resultados.diasHospitalizacion }} días de hospitalización</strong>
+            — los costos por día ya incluyen el multiplicador correspondiente
+          </div>
+
+          <!-- Tabla -->
+          <div class="table-wrapper">
+            <table class="proc-table">
+              <thead>
+                <tr>
+                  <th class="col-proc">Procedimiento</th>
+                  <th class="col-cost">Base</th>
+                  <th class="col-cost col-cost--1">1er Nivel<br><span class="col-sub">UMF</span></th>
+                  <th class="col-cost col-cost--2">2do Nivel<br><span class="col-sub">HGZ/HGR</span></th>
+                  <th class="col-cost col-cost--3">3er Nivel<br><span class="col-sub">UMAE</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let p of procedimientosList">
+                  <td class="proc-nombre">{{ p.desProcedimiento }}</td>
+                  <td class="proc-monto proc-monto--base">{{ formatPeso(p.numCostoBase) }}</td>
+                  <td class="proc-monto">{{ formatPeso(p.numCosto1erNivel) }}</td>
+                  <td class="proc-monto">{{ formatPeso(p.numCosto2doNivel) }}</td>
+                  <td class="proc-monto">{{ formatPeso(p.numCosto3erNivel) }}</td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr class="totals-row">
+                  <td class="total-label">Total estimado</td>
+                  <td class="total-monto total-monto--base">{{ formatPeso(resultados.totalBase) }}</td>
+                  <td class="total-monto">{{ formatPeso(resultados.total1erNivel) }}</td>
+                  <td class="total-monto">{{ formatPeso(resultados.total2doNivel) }}</td>
+                  <td class="total-monto">{{ formatPeso(resultados.total3erNivel) }}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <!-- Footer referencia -->
+          <div class="proc-footer">
+            <span>Costos de referencia IMSS</span>
+            <span class="proc-footer-dot">·</span>
+            <span>1er nivel: UMF (Unidad Médica Familiar)</span>
+            <span class="proc-footer-dot">·</span>
+            <span>2do nivel: HGZ/HGR (Hospital General de Zona)</span>
+            <span class="proc-footer-dot">·</span>
+            <span>3er nivel: UMAE (Alta Especialidad)</span>
+          </div>
+
+          <!-- Resumen de totales por nivel -->
+          <div class="levels-summary">
+            <div class="level-card level-card--base">
+              <div class="level-card-label">Costo base</div>
+              <div class="level-card-amount">{{ formatPeso(resultados.totalBase) }}</div>
+            </div>
+            <div class="level-card level-card--1">
+              <div class="level-card-label">1er Nivel · UMF</div>
+              <div class="level-card-amount">{{ formatPeso(resultados.total1erNivel) }}</div>
+            </div>
+            <div class="level-card level-card--2">
+              <div class="level-card-label">2do Nivel · HGZ</div>
+              <div class="level-card-amount">{{ formatPeso(resultados.total2doNivel) }}</div>
+            </div>
+            <div class="level-card level-card--3">
+              <div class="level-card-label">3er Nivel · UMAE</div>
+              <div class="level-card-amount">{{ formatPeso(resultados.total3erNivel) }}</div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Disclaimer -->
+        <div class="results-disclaimer">
+          Los costos son de referencia basados en el catálogo IMSS. Para fines de facturación,
+          verifica con el área administrativa de la unidad médica.
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+</div>
