@@ -268,4 +268,210 @@ export class CostosComponent implements OnInit {
     if (!motivo) return '—';
     return motivo.length > 60 ? motivo.substring(0, 60) + '…' : motivo;
   }
+
+  exportarPDF(): void {
+    if (!this.resultados) return;
+
+    const nombrePaciente = this.paciente?.nombre ?? 'Sin paciente registrado';
+    const curp           = this.paciente?.curp   ?? '—';
+    const nss            = this.paciente?.nss     ?? '—';
+    const unidad         = this.paciente?.unidadAdscripcion ?? '—';
+    const fecha          = new Date().toLocaleDateString('es-MX', { day:'2-digit', month:'long', year:'numeric' });
+    const horaStr        = new Date().toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' });
+
+    const filas = this.procedimientosList.map(p => `
+      <tr>
+        <td class="td-proc">${p.desProcedimiento}</td>
+        <td class="td-num td-base">${this.formatPeso(p.numCostoBase)}</td>
+        <td class="td-num td-1">${this.formatPeso(p.numCosto1erNivel)}</td>
+        <td class="td-num td-2">${this.formatPeso(p.numCosto2doNivel)}</td>
+        <td class="td-num td-3">${this.formatPeso(p.numCosto3erNivel)}</td>
+      </tr>`).join('');
+
+    const hospBanner = this.resultados.diasHospitalizacion > 0
+      ? `<div class="hosp-banner">🏥 <strong>${this.resultados.diasHospitalizacion} días de hospitalización</strong> — los costos por día ya incluyen el multiplicador correspondiente</div>`
+      : '';
+
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Costos IMSS — ${nombrePaciente}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #fff; color: #1a1a1a; font-size: 13px; }
+
+    /* ENCABEZADO */
+    .header { background: linear-gradient(135deg, #7a1034 0%, #9b1a6a 100%); color: #fff; padding: 24px 32px; display: flex; align-items: center; justify-content: space-between; }
+    .header-left { display: flex; flex-direction: column; gap: 4px; }
+    .header-inst { font-size: 10px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; opacity: .75; }
+    .header-title { font-size: 20px; font-weight: 700; letter-spacing: .3px; }
+    .header-sub { font-size: 11px; opacity: .7; font-family: monospace; }
+    .header-right { text-align: right; font-size: 11px; opacity: .8; line-height: 1.7; }
+    .header-date { font-weight: 600; font-size: 12px; opacity: 1; }
+
+    /* PACIENTE */
+    .patient-section { background: #f5f5f5; border-bottom: 2px solid #1A6B3C; padding: 14px 32px; display: flex; align-items: center; gap: 32px; }
+    .patient-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #888; margin-bottom: 3px; }
+    .patient-name { font-size: 17px; font-weight: 700; color: #1a1a1a; }
+    .patient-detail { font-size: 11px; color: #444; font-family: monospace; letter-spacing: .5px; }
+    .patient-info-group { display: flex; flex-direction: column; }
+    .patient-divider { width: 1px; background: #ddd; height: 36px; flex-shrink: 0; }
+
+    /* CUERPO */
+    .body { padding: 24px 32px; }
+
+    /* BANNER HOSPITALIZACIÓN */
+    .hosp-banner { background: #fff8e1; border: 1px solid #ffe082; border-radius: 6px; padding: 8px 14px; margin-bottom: 16px; font-size: 12px; color: #7a5800; }
+
+    /* TABLA */
+    .table-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: #1A6B3C; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+    .table-title::after { content: ''; flex: 1; height: 1px; background: #d4edda; }
+
+    table { width: 100%; border-collapse: collapse; margin-bottom: 0; }
+    thead tr { background: #1A6B3C; color: #fff; }
+    thead th { padding: 9px 14px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; text-align: left; }
+    thead th.th-num { text-align: right; }
+    thead th.th-1 { background: #16603a; }
+    thead th.th-2 { background: #7a5800; }
+    thead th.th-3 { background: #7b1457; }
+
+    tbody tr:nth-child(even) { background: #f9fffe; }
+    tbody tr:nth-child(odd)  { background: #fff; }
+    tbody tr:hover { background: #f0faf5; }
+
+    td { padding: 9px 14px; border-bottom: 1px solid #eaf5ec; vertical-align: middle; }
+    .td-proc { font-weight: 500; font-size: 12px; }
+    .td-num { text-align: right; font-family: monospace; font-size: 12px; }
+    .td-base { color: #1A6B3C; font-weight: 700; }
+    .td-1    { color: #1A6B3C; }
+    .td-2    { color: #7a5800; }
+    .td-3    { color: #7b1457; }
+
+    tfoot tr { background: #e8f5ee; }
+    tfoot td { padding: 10px 14px; font-weight: 700; border-top: 2px solid #9FE1CB; }
+    .tf-label { font-size: 12px; color: #1A6B3C; }
+    .tf-num { text-align: right; font-family: monospace; font-size: 13px; }
+
+    /* RESUMEN NIVELES */
+    .levels { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 20px; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; }
+    .level { padding: 14px 16px; text-align: center; border-right: 1px solid #e0e0e0; }
+    .level:last-child { border-right: none; }
+    .level-lbl { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: #888; margin-bottom: 5px; font-family: monospace; }
+    .level-amt { font-size: 15px; font-weight: 700; font-family: monospace; }
+    .lv-base { background: #fafafa; } .lv-base .level-amt { color: #1a1a1a; }
+    .lv-1    { background: #f0faf5; } .lv-1    .level-amt { color: #1A6B3C; }
+    .lv-2    { background: #fff8e1; } .lv-2    .level-amt { color: #7a5800; }
+    .lv-3    { background: #fce7f0; } .lv-3    .level-amt { color: #7b1457; }
+
+    /* FOOTER */
+    .footer { margin-top: 28px; padding: 14px 32px; background: #f5f5f5; border-top: 1px solid #e0e0e0; font-size: 10px; color: #999; font-family: monospace; display: flex; justify-content: space-between; align-items: center; }
+    .footer-note { line-height: 1.6; }
+    .footer-logo { font-size: 11px; font-weight: 700; color: #7a1034; letter-spacing: .5px; }
+
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      @page { size: A4 landscape; margin: 8mm; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="header-left">
+      <div class="header-inst">Instituto Mexicano del Seguro Social</div>
+      <div class="header-title">Reporte de Costos de Procedimientos</div>
+      <div class="header-sub">Catálogo de referencia IMSS por nivel de atención</div>
+    </div>
+    <div class="header-right">
+      <div class="header-date">${fecha}</div>
+      <div>${horaStr} hrs</div>
+      <div>${unidad}</div>
+    </div>
+  </div>
+
+  <div class="patient-section">
+    <div class="patient-info-group">
+      <div class="patient-label">Paciente</div>
+      <div class="patient-name">${nombrePaciente}</div>
+    </div>
+    <div class="patient-divider"></div>
+    <div class="patient-info-group">
+      <div class="patient-label">CURP</div>
+      <div class="patient-detail">${curp}</div>
+    </div>
+    <div class="patient-divider"></div>
+    <div class="patient-info-group">
+      <div class="patient-label">NSS</div>
+      <div class="patient-detail">${nss}</div>
+    </div>
+  </div>
+
+  <div class="body">
+
+    ${hospBanner}
+
+    <div class="table-title">Procedimientos detectados (${this.resultados.totalProcedimientos})</div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Procedimiento</th>
+          <th class="th-num">Base</th>
+          <th class="th-num th-1">1er Nivel · UMF</th>
+          <th class="th-num th-2">2do Nivel · HGZ/HGR</th>
+          <th class="th-num th-3">3er Nivel · UMAE</th>
+        </tr>
+      </thead>
+      <tbody>${filas}</tbody>
+      <tfoot>
+        <tr>
+          <td class="tf-label">Total estimado</td>
+          <td class="tf-num td-base">${this.formatPeso(this.resultados.totalBase)}</td>
+          <td class="tf-num td-1">${this.formatPeso(this.resultados.total1erNivel)}</td>
+          <td class="tf-num td-2">${this.formatPeso(this.resultados.total2doNivel)}</td>
+          <td class="tf-num td-3">${this.formatPeso(this.resultados.total3erNivel)}</td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <div class="levels">
+      <div class="level lv-base">
+        <div class="level-lbl">Costo Base</div>
+        <div class="level-amt">${this.formatPeso(this.resultados.totalBase)}</div>
+      </div>
+      <div class="level lv-1">
+        <div class="level-lbl">1er Nivel · UMF</div>
+        <div class="level-amt">${this.formatPeso(this.resultados.total1erNivel)}</div>
+      </div>
+      <div class="level lv-2">
+        <div class="level-lbl">2do Nivel · HGZ</div>
+        <div class="level-amt">${this.formatPeso(this.resultados.total2doNivel)}</div>
+      </div>
+      <div class="level lv-3">
+        <div class="level-lbl">3er Nivel · UMAE</div>
+        <div class="level-amt">${this.formatPeso(this.resultados.total3erNivel)}</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <div class="footer-note">
+      Los costos son de referencia basados en el catálogo IMSS.<br>
+      Para fines de facturación, verificar con el área administrativa de la unidad médica.
+    </div>
+    <div class="footer-logo">IMSS · IMSS-IA</div>
+  </div>
+
+  <script>window.onload = () => { window.print(); }</script>
+</body>
+</html>`;
+
+    const ventana = window.open('', '_blank', 'width=1100,height=750');
+    if (ventana) {
+      ventana.document.write(html);
+      ventana.document.close();
+    }
+  }
 }
