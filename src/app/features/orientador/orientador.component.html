@@ -1,0 +1,123 @@
+<main class="main">
+
+  <section class="ai-section">
+
+    <div class="ai-header">
+      <div class="ai-title">
+        <span>🧭</span> Orientador del Sistema ECSUS
+        <span class="ai-badge">BETA</span>
+      </div>
+      <span class="ai-model-tag">MedGemma 4B-it · LM Studio · Guías ECSUS</span>
+    </div>
+
+    <div class="chat-card">
+
+      <!-- ══ MENSAJES ══ -->
+      <div class="chat-messages" #chatContainer>
+
+        <!-- Empty state -->
+        <div class="chat-empty" *ngIf="messages.length === 0 && !aiLoading">
+          <div class="chat-empty-icon">🧭</div>
+          <div class="chat-empty-text">
+            Soy el Orientador del Sistema ECSUS.<br>
+            Pregúntame cómo navegar el sistema: iniciar sesión, buscar pacientes,
+            agendar citas, capturar la nota médica, solicitar estudios, etc.
+          </div>
+          <div class="chat-empty-sub">Powered by MedGemma 4B-it · msmedgemma-core</div>
+        </div>
+
+        <!-- Mensajes -->
+        <div
+          *ngFor="let msg of messages; trackBy: trackById"
+          class="msg"
+          [class.msg--user]="msg.role === 'user'"
+          [class.msg--ai]="msg.role === 'ai'"
+        >
+          <div class="msg-avatar">{{ msg.role === 'user' ? '👨‍⚕️' : '🧭' }}</div>
+          <div class="msg-body">
+
+            <div class="msg-bubble" [innerHTML]="formatMessage(msg.text)"></div>
+
+            <!-- Capturas de pantalla relacionadas -->
+            <div class="msg-images" *ngIf="msg.imagenes?.length">
+              <a
+                *ngFor="let img of msg.imagenes"
+                [href]="img"
+                target="_blank"
+                class="msg-image-link"
+              >
+                <img [src]="img" alt="Captura de pantalla de ECSUS" class="msg-image">
+              </a>
+            </div>
+
+            <div class="msg-meta">
+              {{ msg.timestamp | date:'HH:mm' }}
+              <span *ngIf="msg.tokensPerSecond">
+                · ⚡ {{ msg.tokensPerSecond | number:'1.1-1' }} tok/s
+              </span>
+              <span *ngIf="msg.totalTokens">
+                · {{ msg.totalTokens }} tokens
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Typing indicator -->
+        <div class="typing-indicator" *ngIf="aiLoading">
+          <div class="msg-avatar">🧭</div>
+          <div class="typing-dots"><span></span><span></span><span></span></div>
+        </div>
+
+      </div>
+
+      <!-- ══ QUICK PROMPTS ══ -->
+      <div class="quick-prompts">
+        <button
+          *ngFor="let qp of quickPrompts"
+          class="quick-btn"
+          (click)="useQuickPrompt(qp.text)"
+          [disabled]="aiLoading"
+        >
+          {{ qp.icon }} {{ qp.label }}
+        </button>
+      </div>
+
+      <!-- ══ PROMPT BAR ══ -->
+      <div class="prompt-bar">
+        <textarea
+          class="prompt-input"
+          [(ngModel)]="promptInput"
+          placeholder="Pregunta cómo usar ECSUS — iniciar sesión, agendar citas, nota médica..."
+          rows="1"
+          (keydown)="onPromptKeydown($event)"
+          (input)="autoResize($event)"
+          [disabled]="aiLoading"
+        ></textarea>
+        <button
+          class="prompt-send"
+          (click)="sendMessage()"
+          [disabled]="aiLoading || !promptInput.trim()"
+          title="Enviar (Enter)"
+        >➤</button>
+      </div>
+
+      <!-- ══ STATS BAR ══ -->
+      <div class="stats-bar" *ngIf="lastResponse.totalOutputTokens">
+        <span class="stats-dot"></span>
+        <span>{{ lastResponse.totalOutputTokens }} tokens</span>
+        <span class="stats-sep">·</span>
+        <span>⚡ {{ lastResponse.tokensPerSecond | number:'1.1-1' }} tok/s</span>
+        <ng-container *ngIf="lastResponse.temaDetectado">
+          <span class="stats-sep">·</span>
+          <span class="stats-tema">📍 {{ lastResponse.temaDetectado }}</span>
+        </ng-container>
+      </div>
+
+      <p class="prompt-hint">
+        El Orientador responde con base en las guías rápidas de ECSUS. Para dudas clínicas,
+        usa el módulo "Atención Médica".
+      </p>
+    </div>
+  </section>
+
+</main>

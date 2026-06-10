@@ -38,6 +38,12 @@ export class ShellComponent implements OnInit {
       label:    'Costos de Procedimientos',
       sublabel: 'Análisis de costos en notas médicas',
       route:    '/dashboard/costos'
+    },
+    {
+      icon:     '🧭',
+      label:    'Orientador del Sistema',
+      sublabel: 'Cómo usar ECSUS',
+      route:    '/dashboard/orientador'
     }
   ];
 

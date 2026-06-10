@@ -42,4 +42,5 @@ export interface ChatMessage {
   especialidad?:             string;
   modoGeneral?:              boolean;
   procedimientosDetectados?: ProcedimientoDetectado[];
+  imagenes?:                 string[];
 }

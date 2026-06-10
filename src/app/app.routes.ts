@@ -24,6 +24,11 @@ export const routes: Routes = [
         path: 'costos',
         loadComponent: () =>
           import('./features/costos/costos.component').then(m => m.CostosComponent)
+      },
+      {
+        path: 'orientador',
+        loadComponent: () =>
+          import('./features/orientador/orientador.component').then(m => m.OrientadorComponent)
       }
     ]
   },
